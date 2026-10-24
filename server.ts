@@ -4,6 +4,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI, Type } from '@google/genai';
 
+import fs from 'fs';
+import { PDFParse } from 'pdf-parse';
+
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12,7 +15,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = parseInt(process.env.PORT || '3000', 10);
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // Initialize Gemini Client
 const ai = process.env.GEMINI_API_KEY
@@ -352,6 +355,89 @@ Respond with strict JSON array.`;
   } catch (error) {
     console.error('Word enrichment error:', error);
     return res.status(500).json({ error: 'Failed to enrich words' });
+  }
+});
+
+// Endpoint to fetch the full 4,002 words Scripps Words of the Champions catalog
+app.get('/api/scripps-words', (_req, res) => {
+  try {
+    const scrippsPath = path.resolve(__dirname, 'src/data/scripps_words.json');
+    if (fs.existsSync(scrippsPath)) {
+      const data = JSON.parse(fs.readFileSync(scrippsPath, 'utf8'));
+      return res.json(data);
+    }
+    return res.status(404).json({ error: 'Scripps repository data not found' });
+  } catch (err) {
+    console.error('Error loading scripps words:', err);
+    return res.status(500).json({ error: 'Failed to load scripps words' });
+  }
+});
+
+// Endpoint to extract text and spelling words from an uploaded or attached PDF
+app.post('/api/extract-pdf-words', async (req, res) => {
+  try {
+    const { base64, useAttachedPdf } = req.body;
+    let uint8: Uint8Array;
+
+    if (useAttachedPdf) {
+      const attachedPath = path.resolve(
+        __dirname,
+        'public/assets/aistudio/Words_of_the_Champions_Printable_FINAL_737b4a0b.pdf'
+      );
+      if (!fs.existsSync(attachedPath)) {
+        return res.status(404).json({ error: 'Attached PDF file not found' });
+      }
+      const fileBuf = fs.readFileSync(attachedPath);
+      uint8 = new Uint8Array(fileBuf);
+    } else if (base64) {
+      const cleanBase64 = base64.replace(/^data:application\/pdf;base64,/, '');
+      const buffer = Buffer.from(cleanBase64, 'base64');
+      uint8 = new Uint8Array(buffer);
+    } else {
+      return res.status(400).json({ error: 'Either base64 PDF or useAttachedPdf is required' });
+    }
+
+    const parser = new PDFParse(uint8);
+    const parsedData = await parser.getText();
+    const rawText = parsedData.text || '';
+
+    // Filter and sanitize spelling bee words from PDF text
+    const lines = rawText.split('\n');
+    const wordsSet = new Set<string>();
+
+    const excludePhrases = new Set([
+      'our purpose', 'our namesake', 'chiefly british spelling', 'preferred spelling',
+      'in good company', 'cruising the airwaves', 'a big time spellebrity', 'eight times the fun',
+      'who knew?', 'who knew', 'did you know?', 'did you know', 'from around the world',
+      'the first bee', 'older than sliced bread', 'find the bee on social media', 'on a global scale',
+      'word club', 'home sweet home', 'it’s all greek to me', 'its all greek to me',
+      'one dictionary to rule them all', 'bee’s bookshelf', 'bees bookshelf', 'great words, great works reading program',
+      'there’s a first time for everything', 'theres a first time for everything',
+      'the 93rd scripps national spelling bee', 'mark your calendar!', 'difficulty level: one bee',
+      'difficulty level: two bee', 'difficulty level: three bee', 'school spelling bee study list',
+      'words of the champions', 'one bee', 'two bee', 'three bee', 'level', 'difficulty'
+    ]);
+
+    for (let l of lines) {
+      let clean = l.replace(/^\*+/, '').trim();
+      if (clean.startsWith('OR ') || clean.startsWith('OR *')) continue;
+      if (!clean || clean.length < 2 || clean.length > 35) continue;
+      if (/[0-9.,;:!?()—–"“”/\\*#@]/.test(clean)) continue;
+      if (clean.split(/\s+/).length > 3) continue;
+      if (excludePhrases.has(clean.toLowerCase())) continue;
+      wordsSet.add(clean);
+    }
+
+    const extractedWords = Array.from(wordsSet);
+    return res.json({
+      success: true,
+      wordCount: extractedWords.length,
+      sample: extractedWords.slice(0, 15),
+      words: extractedWords,
+    });
+  } catch (err: any) {
+    console.error('PDF extraction error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to extract text from PDF' });
   }
 });
 

@@ -109,21 +109,34 @@ export function getCustomWords(): WordItem[] {
 }
 
 export function saveCustomWord(word: WordItem): WordItem[] {
+  return saveBatchCustomWords([word]);
+}
+
+export function saveBatchCustomWords(newWords: WordItem[]): WordItem[] {
   const current = getCustomWords();
-  const existingIdx = current.findIndex((w) => w.id === word.id);
-  let updated: WordItem[];
-  if (existingIdx >= 0) {
-    updated = [...current];
-    updated[existingIdx] = word;
-  } else {
-    updated = [word, ...current];
+  const existingMap = new Map<string, number>();
+  current.forEach((w, idx) => existingMap.set(w.id, idx));
+
+  const updated = [...current];
+  const toPrepend: WordItem[] = [];
+
+  for (const word of newWords) {
+    if (existingMap.has(word.id)) {
+      const idx = existingMap.get(word.id)!;
+      updated[idx] = word;
+    } else {
+      toPrepend.push(word);
+      existingMap.set(word.id, updated.length + toPrepend.length);
+    }
   }
+
+  const finalResult = [...toPrepend, ...updated];
   try {
-    localStorage.setItem('spellbee_custom_words', JSON.stringify(updated));
+    localStorage.setItem('spellbee_custom_words', JSON.stringify(finalResult));
   } catch (e) {
-    console.error('Failed to save custom words', e);
+    console.error('Failed to save batch custom words', e);
   }
-  return updated;
+  return finalResult;
 }
 
 export function getAllWords(): WordItem[] {

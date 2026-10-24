@@ -8,6 +8,7 @@ import {
   saveUserProfile,
   getAllWords,
   saveCustomWord,
+  saveBatchCustomWords,
 } from './utils/storage';
 import { Navbar } from './components/Navbar';
 import { ChampionshipArena } from './components/ChampionshipArena';
@@ -128,9 +129,7 @@ export default function App() {
   };
 
   const handleBatchImportWords = (newWords: WordItem[]) => {
-    for (const w of newWords) {
-      saveCustomWord(w);
-    }
+    saveBatchCustomWords(newWords);
     setAllWords(getAllWords());
   };
 

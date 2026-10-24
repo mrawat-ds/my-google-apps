@@ -31,6 +31,8 @@ export const WordBankView: React.FC<WordBankViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [isFlashcardMode, setIsFlashcardMode] = useState(false);
   const [flippedWordIds, setFlippedWordIds] = useState<Record<string, boolean>>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 24;
 
   const filtered = words.filter((w) => {
     if (selectedDifficulty !== 'all' && w.difficulty !== selectedDifficulty) return false;
@@ -48,6 +50,10 @@ export const WordBankView: React.FC<WordBankViewProps> = ({
     }
     return true;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const activePage = Math.min(currentPage, totalPages);
+  const paginatedWords = filtered.slice((activePage - 1) * pageSize, activePage * pageSize);
 
   const toggleFlip = (id: string) => {
     setFlippedWordIds((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -103,6 +109,32 @@ export const WordBankView: React.FC<WordBankViewProps> = ({
             <span>Add Single Word</span>
           </button>
         </div>
+      </div>
+
+      {/* Official Scripps Booklet Banner */}
+      <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 text-white p-4 sm:p-5 rounded-3xl shadow-md shadow-amber-500/15 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-white/20 text-white tracking-wider">
+              Official PDF Available
+            </span>
+            <span className="text-xs font-bold text-amber-100">Scripps National Spelling Bee</span>
+          </div>
+          <h3 className="text-lg font-black text-white mt-1">
+            Words of the Champions (4,002 Competition Words)
+          </h3>
+          <p className="text-xs text-amber-100/90 mt-0.5">
+            One Bee (800 words), Two Bee (2,100 words), and Three Bee (1,102 words) from the attached printable booklet.
+          </p>
+        </div>
+
+        <button
+          onClick={onOpenImportModal}
+          className="px-4 py-2.5 rounded-2xl bg-white hover:bg-amber-50 text-amber-950 font-black text-xs shadow-sm flex items-center justify-center gap-2 shrink-0 transition-all cursor-pointer"
+        >
+          <Sparkles className="w-4 h-4 text-amber-600" />
+          <span>Import from Attached PDF</span>
+        </button>
       </div>
 
       {/* Filter & Search Bar */}
@@ -174,7 +206,7 @@ export const WordBankView: React.FC<WordBankViewProps> = ({
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((word) => {
+          {paginatedWords.map((word) => {
             const isFlipped = flippedWordIds[word.id];
             const assignedTagIds = wordTagsMap[word.id] || [];
             const tags = userTags.filter((t) => assignedTagIds.includes(t.id) || word.tags.includes(t.id));
@@ -351,6 +383,39 @@ export const WordBankView: React.FC<WordBankViewProps> = ({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <span className="text-slate-500 font-semibold">
+            Showing <strong className="text-slate-900">{(activePage - 1) * pageSize + 1}</strong> to{' '}
+            <strong className="text-slate-900">{Math.min(activePage * pageSize, filtered.length)}</strong> of{' '}
+            <strong className="text-slate-900">{filtered.length}</strong> words
+          </span>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={activePage === 1}
+              className="px-3.5 py-2 rounded-xl border border-slate-200 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+
+            <span className="px-3 py-2 font-bold text-amber-950 bg-amber-50 rounded-xl border border-amber-200">
+              Page {activePage} of {totalPages}
+            </span>
+
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={activePage === totalPages}
+              className="px-3.5 py-2 rounded-xl border border-slate-200 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
     </div>
